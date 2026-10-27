@@ -1,0 +1,39 @@
+name: Datastore integration tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      datastore:
+        image: guibeira/datastore-emulator:0.1.11
+        ports:
+          - 8081:8042
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 1s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Wait for Datastore
+        run: curl --fail --silent --show-error --retry 20 --retry-connrefused --retry-delay 1 http://localhost:8081/
+      - name: Install, test and build
+        run: |
+          docker run --rm --network host \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --workdir /workspace \
+            --env CI=true \
+            node:22-bookworm \
+            sh -c 'yarn install --frozen-lockfile --non-interactive && yarn test:integration --runInBand && yarn build'
